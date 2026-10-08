@@ -5,37 +5,47 @@ on:
     branches: [main, master]
     tags: ['v*']
   pull_request:
-  workflow_dispatch:            # 支持网页上手动点一下就跑
+  workflow_dispatch:
 
 permissions:
-  contents: write               # 打 tag 时用于发布 Release
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
+      # 关键改动：直接让 setup-android 装上 platform/build-tools，并自动接受许可
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      # 从官方 Release 下载 frpc，直接改名 libfrpc.so 放进 jniLibs。
-      # 好处：仓库里不需要提交 16MB 二进制；也不受本地杀软误删影响。
+      # 打印环境，便于排错
+      - name: Show environment
+        run: |
+          java -version
+          gradle --version || true
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_SDK_ROOT" || true
+
+      # 生成 SDK 定位文件，避免 "SDK location not found"
+      - name: Write local.properties
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
       - name: Download frpc -> jniLibs/libfrpc.so
         run: |
           set -e
@@ -47,8 +57,6 @@ jobs:
           cp frp_0.71.0_android_arm64/frpc app/src/main/jniLibs/arm64-v8a/libfrpc.so
           ls -l app/src/main/jniLibs/arm64-v8a/
 
-      # 用仓库 Secret 注入出厂默认配置，避免把 token 写进代码。
-      # 未设置 Secret 时，保留仓库里的占位版 default_config.json。
       - name: Inject default config (from secret, optional)
         env:
           DEFAULT_CONFIG_JSON: ${{ secrets.DEFAULT_CONFIG_JSON }}
@@ -57,8 +65,12 @@ jobs:
             printf '%s' "$DEFAULT_CONFIG_JSON" > app/src/main/assets/default_config.json
           fi
 
+      # 先生成 wrapper 再构建，避免 "gradle: command not found" 之类问题
+      - name: Ensure Gradle wrapper
+        run: gradle wrapper --gradle-version 8.7
+
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
