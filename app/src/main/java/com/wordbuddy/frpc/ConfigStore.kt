@@ -12,7 +12,7 @@ import java.io.File
  *   filesDir/configs/index.json       {"active":"main","names":["main","home"]}
  *   filesDir/configs/<name>.json      各条配置
  *   filesDir/defaults.json            默认模板（可修改）
- *   filesDir/backup/*.bak             所有配置与模板的备份
+ *   filesDir/backup/xxx.bak           所有配置与模板的备份
  *   assets/default_config.json        出厂默认（随 APK，删不掉）
  *
  * 防丢策略：
