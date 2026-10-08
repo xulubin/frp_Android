@@ -1,5 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FRP 按需远控</string>
-    <string name="tile_label">FRP 隧道</string>
+    <string name="app_name" translatable="false">frp_light</string>
+    <string name="tile_label">FRP tunnel</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_control">Control</string>
+    <string name="nav_config">Config</string>
+    <string name="nav_list">Profiles</string>
+
+    <!-- Control page -->
+    <string name="state_stopped">Stopped</string>
+    <string name="state_running">Running</string>
+    <string name="state_unknown">Unknown</string>
+    <string name="btn_start">Start</string>
+    <string name="btn_stop">Stop</string>
+    <string name="hint_start">Tap to start the remote tunnel</string>
+    <string name="hint_running">Tunnel is running. Tap to stop.</string>
+
+    <string name="card_conn">Connection</string>
+    <string name="card_log">Recent log</string>
+    <string name="label_profile">Profile: %1$s</string>
+    <string name="label_server">Server: %1$s</string>
+    <string name="label_tunnel">Tunnel: %1$s</string>
+    <string name="label_ports">Local %1$d → Remote %2$d</string>
+    <string name="label_version">frpc version: %1$s</string>
+    <string name="label_binary">Core binary: %1$s</string>
+    <string name="binary_ok">OK</string>
+    <string name="binary_missing">Missing (libfrpc.so not bundled)</string>
+    <string name="btn_open_log">View full log</string>
+    <string name="log_empty">No log yet</string>
+    <string name="log_dialog_title">frpc log</string>
+    <string name="btn_close">Close</string>
+
+    <!-- Config editor -->
+    <string name="card_server">Server</string>
+    <string name="card_tunnel">Tunnel mapping</string>
+    <string name="card_options">Options</string>
+    <string name="hint_profile_name">Profile name</string>
+    <string name="hint_server_addr">Server address (serverAddr)</string>
+    <string name="hint_server_port">Server port (serverPort)</string>
+    <string name="hint_token">Auth token</string>
+    <string name="hint_user">User (optional)</string>
+    <string name="hint_dns">DNS (e.g. 114.114.114.114)</string>
+    <string name="hint_proxy_name">Tunnel name (proxyName)</string>
+    <string name="hint_local_ip">Local IP (localIP)</string>
+    <string name="hint_local_port">Local port (must equal adbd port, e.g. 5555)</string>
+    <string name="hint_remote_port">Remote port (remotePort, 60000-65530)</string>
+    <string name="cb_tls">Enable TLS</string>
+    <string name="cb_enc">Enable encryption (useEncryption)</string>
+    <string name="cb_comp">Enable compression (useCompression)</string>
+    <string name="btn_save">Save only</string>
+    <string name="btn_save_start">Save &amp; start</string>
+    <string name="btn_set_default">Set current as default template</string>
+    <string name="btn_restore_default">Restore from default template</string>
+    <string name="config_tip">Local port must equal the phone\'s adbd port and the root daemon\'s ADB_PORT, otherwise adb shows offline.</string>
+
+    <!-- Profiles page -->
+    <string name="card_profiles">Profiles</string>
+    <string name="profiles_tip">Tap a profile to make it active. Only the active profile is used when starting frpc.</string>
+    <string name="btn_new_profile">New profile</string>
+    <string name="btn_import">Import</string>
+    <string name="btn_export">Export</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="label_active">ACTIVE</string>
+    <string name="profiles_empty">No profile yet. Tap \"New profile\".</string>
+
+    <string name="dialog_new_profile_title">New profile</string>
+    <string name="dialog_new_profile_hint">Profile name</string>
+    <string name="dlg_ok">OK</string>
+    <string name="dlg_cancel">Cancel</string>
+
+    <!-- Toasts / errors -->
+    <string name="toast_saved">Profile saved</string>
+    <string name="toast_set_default">Saved as default template</string>
+    <string name="toast_restored">Restored from default template</string>
+    <string name="toast_started">Starting frpc…</string>
+    <string name="toast_stopped">frpc stopped</string>
+    <string name="toast_profile_created">Profile created: %1$s</string>
+    <string name="toast_profile_deleted">Profile deleted: %1$s</string>
+    <string name="toast_exported">Exported</string>
+    <string name="toast_imported">Imported as: %1$s</string>
+    <string name="toast_import_failed">Import failed: %1$s</string>
+    <string name="toast_export_failed">Export failed: %1$s</string>
+    <string name="err_last_profile">Cannot delete the last profile</string>
+    <string name="err_name_empty">Name cannot be empty</string>
+    <string name="export_file_name">frp_light_profile.json</string>
+
+    <!-- Battery guidance -->
+    <string name="battery_title">Keep-alive suggestion</string>
+    <string name="battery_message">To prevent the system from killing frpc in the background, add this app to the battery optimization whitelist.</string>
+    <string name="battery_go">Open settings</string>
+    <string name="battery_later">Later</string>
 </resources>

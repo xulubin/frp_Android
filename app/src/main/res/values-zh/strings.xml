@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">frp_light</string>
+    <string name="tile_label">FRP 隧道</string>
+
+    <!-- 底部导航 -->
+    <string name="nav_control">控制</string>
+    <string name="nav_config">配置</string>
+    <string name="nav_list">配置列表</string>
+
+    <!-- 控制页 -->
+    <string name="state_stopped">已停止</string>
+    <string name="state_running">运行中</string>
+    <string name="state_unknown">未知</string>
+    <string name="btn_start">启动</string>
+    <string name="btn_stop">停止</string>
+    <string name="hint_start">点击启动，开启远程隧道</string>
+    <string name="hint_running">隧道运行中，点击可停止</string>
+
+    <string name="card_conn">连接信息</string>
+    <string name="card_log">最近日志</string>
+    <string name="label_profile">配置：%1$s</string>
+    <string name="label_server">服务端：%1$s</string>
+    <string name="label_tunnel">隧道名：%1$s</string>
+    <string name="label_ports">本地 %1$d → 远程 %2$d</string>
+    <string name="label_version">frpc 版本：%1$s</string>
+    <string name="label_binary">内核状态：%1$s</string>
+    <string name="binary_ok">正常</string>
+    <string name="binary_missing">缺失（未放入 libfrpc.so）</string>
+    <string name="btn_open_log">查看完整日志</string>
+    <string name="log_empty">暂无日志</string>
+    <string name="log_dialog_title">frpc 日志</string>
+    <string name="btn_close">关闭</string>
+
+    <!-- 配置编辑页 -->
+    <string name="card_server">服务器</string>
+    <string name="card_tunnel">隧道映射</string>
+    <string name="card_options">选项</string>
+    <string name="hint_profile_name">配置名称</string>
+    <string name="hint_server_addr">服务器地址 serverAddr</string>
+    <string name="hint_server_port">服务器端口 serverPort</string>
+    <string name="hint_token">认证 Token</string>
+    <string name="hint_user">用户标识 user（可留空）</string>
+    <string name="hint_dns">DNS（如 114.114.114.114）</string>
+    <string name="hint_proxy_name">隧道名称 proxyName</string>
+    <string name="hint_local_ip">本地地址 localIP</string>
+    <string name="hint_local_port">本地端口（须与 adbd 端口一致，如 5555）</string>
+    <string name="hint_remote_port">远程端口 remotePort（60000-65530）</string>
+    <string name="cb_tls">启用 TLS 加密传输</string>
+    <string name="cb_enc">启用隧道加密 useEncryption</string>
+    <string name="cb_comp">启用压缩 useCompression</string>
+    <string name="btn_save">仅保存配置</string>
+    <string name="btn_save_start">保存并启动</string>
+    <string name="btn_set_default">把当前内容设为【默认模板】</string>
+    <string name="btn_restore_default">从【默认模板】恢复</string>
+    <string name="config_tip">本地端口必须 = 手机 adbd 端口 = root 守护的 ADB_PORT，否则会 offline。</string>
+
+    <!-- 配置列表页 -->
+    <string name="card_profiles">配置列表</string>
+    <string name="profiles_tip">点击某条配置将其设为当前生效项；启动 frpc 时只使用当前生效的配置。</string>
+    <string name="btn_new_profile">新建配置</string>
+    <string name="btn_import">导入</string>
+    <string name="btn_export">导出</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_delete">删除</string>
+    <string name="label_active">当前</string>
+    <string name="profiles_empty">还没有配置，点「新建配置」开始。</string>
+
+    <string name="dialog_new_profile_title">新建配置</string>
+    <string name="dialog_new_profile_hint">配置名称</string>
+    <string name="dlg_ok">确定</string>
+    <string name="dlg_cancel">取消</string>
+
+    <!-- 提示 -->
+    <string name="toast_saved">配置已保存</string>
+    <string name="toast_set_default">已设为【默认模板】</string>
+    <string name="toast_restored">已从【默认模板】恢复</string>
+    <string name="toast_started">正在启动 frpc…</string>
+    <string name="toast_stopped">已停止 frpc</string>
+    <string name="toast_profile_created">已新建配置：%1$s</string>
+    <string name="toast_profile_deleted">已删除配置：%1$s</string>
+    <string name="toast_exported">已导出</string>
+    <string name="toast_imported">已导入为：%1$s</string>
+    <string name="toast_import_failed">导入失败：%1$s</string>
+    <string name="toast_export_failed">导出失败：%1$s</string>
+    <string name="err_last_profile">不能删除最后一条配置</string>
+    <string name="err_name_empty">名称不能为空</string>
+    <string name="export_file_name">frp_light_profile.json</string>
+
+    <!-- 保活引导 -->
+    <string name="battery_title">后台保活建议</string>
+    <string name="battery_message">为避免系统在后台杀掉 frpc，建议把本应用加入电池优化白名单（不限制后台）。</string>
+    <string name="battery_go">去设置</string>
+    <string name="battery_later">稍后</string>
+</resources>

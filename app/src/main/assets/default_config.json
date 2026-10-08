@@ -1,4 +1,5 @@
 {
+  "name": "default",
   "serverAddr": "<你的公益frp服务器域名或IP>",
   "serverPort": 7000,
   "authToken": "<面板给你的token>",

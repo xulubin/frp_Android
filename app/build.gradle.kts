@@ -47,4 +47,6 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // Material Components：底部导航、MaterialButton（大圆按钮）、TextInputLayout 等
+    implementation("com.google.android.material:material:1.12.0")
 }

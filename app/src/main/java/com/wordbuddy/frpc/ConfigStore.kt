@@ -1,61 +1,190 @@
 package com.wordbuddy.frpc
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 
 /**
- * 配置存储 —— 三级防丢设计
+ * 配置存储（多配置 + 防丢）
  *
- * 工作配置(config.json) 读取优先级：
- *   主文件 -> backup 备份 -> 用户默认 -> 备份默认 -> SharedPreferences -> assets 出厂
+ * 目录结构：
+ *   filesDir/configs/index.json       {"active":"main","names":["main","home"]}
+ *   filesDir/configs/<name>.json      各条配置
+ *   filesDir/defaults.json            默认模板（可修改）
+ *   filesDir/backup/*.bak             所有配置与模板的备份
+ *   assets/default_config.json        出厂默认（随 APK，删不掉）
  *
- * 默认配置(defaults.json) 读取优先级：
- *   主文件 -> backup 备份 -> SharedPreferences -> assets 出厂
- *
- * 写入时：主文件 + backup 备份 双写；默认配置额外写一份 SharedPreferences。
- * 另外 Manifest 开启 allowBackup + 备份规则，重装/清数据后可云恢复。
- * assets/default_config.json 随 APK 打包，永远删不掉，是最后防线。
+ * 防丢策略：
+ *   - 读取时按 主文件 -> 备份 -> 默认模板 -> SharedPreferences -> assets 逐级降级
+ *   - 写入时主文件与备份双写
+ *   - 旧版单配置 filesDir/config.json 会在首次运行时自动迁移成第一条配置
  */
 object ConfigStore {
 
     private const val PREF = "frpc_prefs"
     private const val PREF_DEFAULTS = "defaults_json"
-    private const val PRIMARY = "config.json"
+    private const val DIR_CONFIGS = "configs"
+    private const val INDEX = "index.json"
     private const val DEFAULTS = "defaults.json"
     private const val BAK_DIR = "backup"
     private const val ASSET_DEFAULT = "default_config.json"
+    private const val LEGACY = "config.json"
+    private const val ACTIVE_NAME = "default"
 
-    private fun main(ctx: Context, name: String) = File(ctx.filesDir, name)
+    // ---------------------------------------------------------------- 路径
+    private fun configsDir(ctx: Context): File =
+        File(ctx.filesDir, DIR_CONFIGS).apply { if (!exists()) mkdirs() }
 
-    private fun bak(ctx: Context, name: String): File {
-        val dir = File(ctx.filesDir, BAK_DIR)
-        if (!dir.exists()) dir.mkdirs()
-        return File(dir, "$name.bak")
+    private fun indexFile(ctx: Context) = File(configsDir(ctx), INDEX)
+
+    private fun profileFile(ctx: Context, name: String) =
+        File(configsDir(ctx), "${safe(name)}.json")
+
+    private fun defaultsFile(ctx: Context) = File(ctx.filesDir, DEFAULTS)
+
+    private fun backupOf(ctx: Context, f: File): File =
+        File(File(ctx.filesDir, BAK_DIR).apply { if (!exists()) mkdirs() }, f.name + ".bak")
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+
+    /** 名称净化：去掉文件系统非法字符，保证可做文件名 */
+    private fun safe(name: String): String {
+        val t = name.trim()
+            .replace(Regex("""[\\/:*?"<>|\s]+"""), "_")
+            .trim('_', '.')
+        return t.ifBlank { ACTIVE_NAME }
     }
 
-    private fun read(f: File): FrpcConfig? = runCatching {
+    // ---------------------------------------------------------------- 读写
+    private fun readJson(f: File): FrpcConfig? = runCatching {
         if (f.exists() && f.length() > 0) FrpcConfig.fromJson(f.readText()) else null
     }.getOrNull()
 
-    private fun write(f: File, c: FrpcConfig) {
+    private fun writeJson(ctx: Context, f: File, c: FrpcConfig) {
         runCatching {
             f.parentFile?.mkdirs()
             f.writeText(c.toJson())
         }
+        runCatching {
+            val b = backupOf(ctx, f)
+            b.parentFile?.mkdirs()
+            b.writeText(c.toJson())
+        }
     }
 
-    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+    // ---------------------------------------------------------------- 索引
+    private fun readNames(ctx: Context): MutableList<String> = runCatching {
+        val f = indexFile(ctx)
+        if (!f.exists()) return@runCatching mutableListOf()
+        val arr = JSONObject(f.readText()).optJSONArray("names") ?: JSONArray()
+        MutableList(arr.length()) { arr.optString(it) }
+    }.getOrDefault(mutableListOf())
 
+    private fun readActive(ctx: Context): String = runCatching {
+        JSONObject(indexFile(ctx).readText()).optString("active", "")
+    }.getOrDefault("")
+
+    private fun writeIndex(ctx: Context, names: List<String>, active: String) {
+        runCatching {
+            val o = JSONObject()
+            o.put("active", active)
+            o.put("names", JSONArray(names))
+            indexFile(ctx).writeText(o.toString(2))
+        }
+    }
+
+    // ------------------------------------------------------------ 配置列表
+    fun listNames(ctx: Context): List<String> =
+        readNames(ctx).filter { profileFile(ctx, it).exists() }
+
+    fun activeName(ctx: Context): String {
+        val names = listNames(ctx)
+        if (names.isEmpty()) return ""
+        val a = readActive(ctx)
+        return if (names.contains(a)) a else names.first()
+    }
+
+    fun setActive(ctx: Context, name: String) {
+        val names = listNames(ctx)
+        if (names.contains(name)) writeIndex(ctx, names, name)
+    }
+
+    fun load(ctx: Context, name: String): FrpcConfig {
+        val f = profileFile(ctx, name)
+        val c = readJson(f) ?: readJson(backupOf(ctx, f)) ?: loadDefaults(ctx)
+        if (c.name.isBlank()) c.name = name
+        return c
+    }
+
+    /** 当前生效配置（frpc 启动时使用） */
+    fun activeConfig(ctx: Context): FrpcConfig {
+        val n = activeName(ctx)
+        return if (n.isBlank()) loadDefaults(ctx) else load(ctx, n)
+    }
+
+    /** 保存"当前生效"配置；名称改变即视为重命名 */
+    fun saveActive(ctx: Context, cfg: FrpcConfig) {
+        val c = cfg.copy()
+        if (c.name.isBlank()) c.name = ACTIVE_NAME
+        val old = activeName(ctx)
+        val names = readNames(ctx).toMutableList()
+
+        // 与其它已有配置重名 -> 自动加后缀
+        if (c.name != old && names.contains(c.name)) {
+            val base = c.name
+            var i = 2
+            while (names.contains(c.name)) { c.name = "${base}_$i"; i++ }
+        }
+
+        writeJson(ctx, profileFile(ctx, c.name), c)
+
+        if (old.isNotEmpty() && old != c.name) {
+            profileFile(ctx, old).delete()
+            backupOf(ctx, profileFile(ctx, old)).delete()
+            names.remove(old)
+        }
+        if (!names.contains(c.name)) names.add(c.name)
+        writeIndex(ctx, names, c.name)
+    }
+
+    /** 新建配置，返回最终名称（重名自动加后缀） */
+    fun create(ctx: Context, desired: String, cfg: FrpcConfig): String {
+        val names = readNames(ctx).toMutableList()
+        val base = safe(desired)
+        var name = base
+        var i = 2
+        while (names.contains(name)) { name = "${base}_$i"; i++ }
+
+        val c = cfg.copy()
+        c.name = name
+        writeJson(ctx, profileFile(ctx, name), c)
+        names.add(name)
+        writeIndex(ctx, names, name)
+        return name
+    }
+
+    fun delete(ctx: Context, name: String): Boolean {
+        val names = readNames(ctx).toMutableList()
+        if (names.size <= 1) return false
+        names.remove(name)
+        profileFile(ctx, name).delete()
+        backupOf(ctx, profileFile(ctx, name)).delete()
+        val active = if (readActive(ctx) == name) names.first() else readActive(ctx)
+        writeIndex(ctx, names, active)
+        return true
+    }
+
+    // ------------------------------------------------------------ 默认模板
     /** 出厂默认：随 APK 打包，不可删除 */
     fun factoryDefault(ctx: Context): FrpcConfig =
         runCatching { ctx.assets.open(ASSET_DEFAULT).bufferedReader().use { it.readText() } }
             .mapCatching { FrpcConfig.fromJson(it) }
             .getOrNull() ?: FrpcConfig.fallback()
 
-    /** 读取"默认配置"（用户可改，多层备份保护） */
     fun loadDefaults(ctx: Context): FrpcConfig {
-        read(main(ctx, DEFAULTS))?.let { return it }
-        read(bak(ctx, DEFAULTS))?.let { return it }
+        readJson(defaultsFile(ctx))?.let { return it }
+        readJson(backupOf(ctx, defaultsFile(ctx)))?.let { return it }
         runCatching {
             val s = prefs(ctx).getString(PREF_DEFAULTS, null)
             if (!s.isNullOrBlank()) FrpcConfig.fromJson(s) else null
@@ -63,35 +192,26 @@ object ConfigStore {
         return factoryDefault(ctx)
     }
 
-    /** 保存"默认配置"：主 + 备份 + 偏好 三写 */
     fun saveDefaults(ctx: Context, c: FrpcConfig) {
-        write(main(ctx, DEFAULTS), c)
-        write(bak(ctx, DEFAULTS), c)
-        runCatching {
-            prefs(ctx).edit().putString(PREF_DEFAULTS, c.toJson()).apply()
-        }
+        writeJson(ctx, defaultsFile(ctx), c)
+        runCatching { prefs(ctx).edit().putString(PREF_DEFAULTS, c.toJson()).apply() }
     }
 
-    /** 读取"工作配置"；任何缺失都会被自动补回，绝不会返回空 */
-    fun loadWorking(ctx: Context): FrpcConfig {
-        read(main(ctx, PRIMARY))?.let { return it }
-        read(bak(ctx, PRIMARY))?.let {
-            saveWorking(ctx, it)          // 自愈：用备份补回主文件
-            return it
-        }
-        val d = loadDefaults(ctx)
-        saveWorking(ctx, d)               // 自愈：用默认补回工作配置
-        return d
-    }
-
-    fun saveWorking(ctx: Context, c: FrpcConfig) {
-        write(main(ctx, PRIMARY), c)
-        write(bak(ctx, PRIMARY), c)
-    }
-
-    /** 启动自愈：确保"默认配置"与"工作配置"都存在且可用 */
+    // ---------------------------------------------------------------- 自愈
     fun ensureWorking(ctx: Context) {
-        if (read(main(ctx, DEFAULTS)) == null) saveDefaults(ctx, loadDefaults(ctx))
-        loadWorking(ctx)
+        // 默认模板自愈
+        if (readJson(defaultsFile(ctx)) == null) saveDefaults(ctx, loadDefaults(ctx))
+
+        val names = listNames(ctx)
+        if (names.isEmpty()) {
+            // 优先迁移旧版单配置，避免老用户丢配置
+            val legacy = readJson(File(ctx.filesDir, LEGACY))
+            val base = legacy ?: loadDefaults(ctx)
+            if (base.name.isBlank()) base.name = ACTIVE_NAME
+            create(ctx, base.name, base)
+        } else {
+            val a = readActive(ctx)
+            if (a.isBlank() || !names.contains(a)) writeIndex(ctx, names, names.first())
+        }
     }
 }

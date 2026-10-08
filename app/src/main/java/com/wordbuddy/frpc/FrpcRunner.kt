@@ -26,6 +26,25 @@ object FrpcRunner {
 
     fun isRunning(): Boolean = process?.isAlive == true
 
+    /**
+     * 读取 frpc 版本（执行 `libfrpc.so -v`）。
+     * 注意：会 fork 子进程，建议在后台线程调用。
+     */
+    fun version(ctx: Context): String {
+        val bin = binary(ctx)
+        if (!bin.exists()) return "-"
+        return try {
+            val p = ProcessBuilder(bin.absolutePath, "-v")
+                .redirectErrorStream(true)
+                .start()
+            val out = p.inputStream.bufferedReader().readText().trim()
+            p.waitFor()
+            Regex("""(\d+\.\d+\.\d+)""").find(out)?.value ?: out.take(24).ifBlank { "-" }
+        } catch (t: Throwable) {
+            "-"
+        }
+    }
+
     /** 返回 null 表示启动成功，否则返回错误信息 */
     @Synchronized
     fun start(ctx: Context): String? {
@@ -37,7 +56,7 @@ object FrpcRunner {
         }
         if (!bin.canExecute()) runCatching { bin.setExecutable(true) }
 
-        val cfg = ConfigStore.loadWorking(ctx)
+        val cfg = ConfigStore.activeConfig(ctx)
         tomlFile(ctx).writeText(TomlBuilder.build(cfg))
 
         return try {

@@ -8,27 +8,46 @@ import androidx.annotation.RequiresApi
 
 /**
  * 快捷设置磁贴：下拉通知栏 -> 点一下 -> 开/关 frpc。
- * 这是本方案最方便的入口（无需 root）。
+ * 磁贴会显示"运行中/已停止"状态角标（STATE_ACTIVE + 副标题）。
  */
 @RequiresApi(Build.VERSION_CODES.N)
 class FrpcTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        val t = qsTile ?: return
-        t.state = if (FrpcRunner.isRunning()) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        t.updateTile()
+        syncTile()
+    }
+
+    override fun onTileAdded() {
+        super.onTileAdded()
+        syncTile()
     }
 
     override fun onClick() {
         super.onClick()
+
         val i = Intent(this, FrpcService::class.java).setAction(FrpcService.ACTION_TOGGLE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
         else startService(i)
 
-        // 立即反馈，稍后在 onStartListening 校正
+        // 立即反馈（服务真正状态稍后由 onStartListening 校正）
+        qsTile?.let { t ->
+            val nowRunning = !FrpcRunner.isRunning()
+            applyState(t, nowRunning)
+            t.updateTile()
+        }
+    }
+
+    private fun syncTile() {
         val t = qsTile ?: return
-        t.state = if (t.state == Tile.STATE_ACTIVE) Tile.STATE_INACTIVE else Tile.STATE_ACTIVE
+        applyState(t, FrpcRunner.isRunning())
         t.updateTile()
+    }
+
+    private fun applyState(t: Tile, running: Boolean) {
+        t.state = if (running) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            t.subtitle = getString(if (running) R.string.state_running else R.string.state_stopped)
+        }
     }
 }

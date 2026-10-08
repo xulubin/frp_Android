@@ -1,77 +1,199 @@
 package com.wordbuddy.frpc
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Button
+import android.os.PowerManager
+import android.provider.Settings
+import android.text.method.ScrollingMovementMethod
+import android.view.View
+import android.view.animation.AnimationUtils
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.ViewFlipper
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
 
+/**
+ * 单 Activity 三页结构：
+ *   0 控制页（默认）：大圆按钮 绿「启动」/ 红「停止」
+ *   1 配置页：编辑"当前生效"的配置
+ *   2 列表页：多配置管理 + 导入 / 导出（SAF，无需存储权限）
+ */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var etServerAddr: EditText
-    private lateinit var etServerPort: EditText
-    private lateinit var etToken: EditText
-    private lateinit var etUser: EditText
-    private lateinit var etDns: EditText
-    private lateinit var etProxyName: EditText
-    private lateinit var etLocalIP: EditText
-    private lateinit var etLocalPort: EditText
-    private lateinit var etRemotePort: EditText
+    private companion object {
+        const val PAGE_CONTROL = 0
+        const val PAGE_CONFIG = 1
+        const val PAGE_PROFILES = 2
+    }
+
+    private lateinit var viewFlipper: ViewFlipper
+    private lateinit var bottomNav: BottomNavigationView
+
+    // ---------------- 控制页 ----------------
+    private lateinit var statusDot: View
+    private lateinit var tvState: TextView
+    private lateinit var btnToggle: MaterialButton
+    private lateinit var tvHint: TextView
+    private lateinit var tvProfile: TextView
+    private lateinit var tvServer: TextView
+    private lateinit var tvTunnel: TextView
+    private lateinit var tvPorts: TextView
+    private lateinit var tvVersion: TextView
+    private lateinit var tvBinary: TextView
+    private lateinit var tvLogPreview: TextView
+
+    // ---------------- 配置页 ----------------
+    private lateinit var etProfileName: TextInputEditText
+    private lateinit var etServerAddr: TextInputEditText
+    private lateinit var etServerPort: TextInputEditText
+    private lateinit var etToken: TextInputEditText
+    private lateinit var etUser: TextInputEditText
+    private lateinit var etDns: TextInputEditText
+    private lateinit var etProxyName: TextInputEditText
+    private lateinit var etLocalIP: TextInputEditText
+    private lateinit var etLocalPort: TextInputEditText
+    private lateinit var etRemotePort: TextInputEditText
     private lateinit var cbTls: CheckBox
     private lateinit var cbEnc: CheckBox
     private lateinit var cbComp: CheckBox
-    private lateinit var tvStatus: TextView
-    private lateinit var tvLog: TextView
+
+    // ---------------- 列表页 ----------------
+    private lateinit var profileList: LinearLayout
+
+    private var frpcVersion = "…"
+
+    // ---------------- SAF：导出 / 导入（无需任何存储权限） ----------------
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        runCatching {
+            contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(ConfigStore.activeConfig(this).toJson().toByteArray(Charsets.UTF_8))
+            }
+            toast(getString(R.string.toast_exported))
+        }.onFailure { toast(getString(R.string.toast_export_failed, it.message ?: "")) }
+    }
+
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        runCatching {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: error("cannot read file")
+            val cfg = FrpcConfig.fromJson(text)
+            val created = ConfigStore.create(this, cfg.name.ifBlank { "imported" }, cfg)
+            refreshProfiles()
+            toast(getString(R.string.toast_imported, created))
+        }.onFailure { toast(getString(R.string.toast_import_failed, it.message ?: "")) }
+    }
+
+    // =================================================================== 生命周期
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
         bindViews()
+        findViewById<MaterialToolbar>(R.id.toolbar).title = getString(R.string.app_name)
+        setupBottomNav()
 
-        // 启动自愈：保证"默认配置"和"工作配置"都存在，绝不空手
+        // 自愈：保证默认模板与至少一条配置存在（并迁移旧版单配置）
         ConfigStore.ensureWorking(this)
-        fill(ConfigStore.loadWorking(this))
 
-        findViewById<Button>(R.id.btnSave).setOnClickListener {
-            ConfigStore.saveWorking(this, collect())
-            toast("工作配置已保存")
+        // ---- 控制页 ----
+        btnToggle.setOnClickListener { toggleFrpc() }
+        findViewById<MaterialButton>(R.id.btnOpenLog).setOnClickListener { showLogDialog() }
+        tvLogPreview.setOnClickListener { showLogDialog() }
+
+        // ---- 配置页 ----
+        findViewById<MaterialButton>(R.id.btnSave).setOnClickListener {
+            ConfigStore.saveActive(this, collect())
+            toast(getString(R.string.toast_saved))
+            refreshControl()
         }
-        findViewById<Button>(R.id.btnStart).setOnClickListener {
-            ConfigStore.saveWorking(this, collect())
-            send(FrpcService.ACTION_START)
+        findViewById<MaterialButton>(R.id.btnSaveStart).setOnClickListener {
+            ConfigStore.saveActive(this, collect())
+            bottomNav.selectedItemId = R.id.nav_control
+            startFrpc()
         }
-        findViewById<Button>(R.id.btnStop).setOnClickListener {
-            send(FrpcService.ACTION_STOP)
-        }
-        findViewById<Button>(R.id.btnSaveAsDefault).setOnClickListener {
+        findViewById<MaterialButton>(R.id.btnSetDefault).setOnClickListener {
             ConfigStore.saveDefaults(this, collect())
-            toast("已设为【默认配置】（主+备份+偏好 三写，不会丢）")
+            toast(getString(R.string.toast_set_default))
         }
-        findViewById<Button>(R.id.btnRestoreDefault).setOnClickListener {
+        findViewById<MaterialButton>(R.id.btnRestoreDefault).setOnClickListener {
             val d = ConfigStore.loadDefaults(this)
-            fill(d)
-            ConfigStore.saveWorking(this, d)
-            toast("已从【默认配置】恢复")
+            fillEditor(d, etProfileName.text.toString().trim().ifBlank { d.name })
+            toast(getString(R.string.toast_restored))
         }
-        findViewById<Button>(R.id.btnLog).setOnClickListener { refreshLog() }
+
+        // ---- 列表页 ----
+        findViewById<MaterialButton>(R.id.btnNewProfile).setOnClickListener { newProfileDialog() }
+        findViewById<MaterialButton>(R.id.btnImport).setOnClickListener {
+            importLauncher.launch(arrayOf("*/*"))
+        }
+        findViewById<MaterialButton>(R.id.btnExport).setOnClickListener {
+            exportLauncher.launch(getString(R.string.export_file_name))
+        }
+
+        // 后台读取 frpc 版本，避免阻塞 UI
+        Thread {
+            val v = FrpcRunner.version(this)
+            runOnUiThread {
+                frpcVersion = v
+                refreshControl()
+            }
+        }.start()
 
         askNotificationPermission()
+        maybeAskBatteryOptimization()
     }
 
     override fun onResume() {
         super.onResume()
-        refreshStatus()
+        if (viewFlipper.displayedChild == PAGE_CONTROL) refreshControl()
     }
 
+    // =================================================================== 绑定
+
     private fun bindViews() {
+        viewFlipper = findViewById(R.id.viewFlipper)
+        bottomNav = findViewById(R.id.bottomNav)
+
+        statusDot = findViewById(R.id.statusDot)
+        tvState = findViewById(R.id.tvState)
+        btnToggle = findViewById(R.id.btnToggle)
+        tvHint = findViewById(R.id.tvHint)
+        tvProfile = findViewById(R.id.tvProfile)
+        tvServer = findViewById(R.id.tvServer)
+        tvTunnel = findViewById(R.id.tvTunnel)
+        tvPorts = findViewById(R.id.tvPorts)
+        tvVersion = findViewById(R.id.tvVersion)
+        tvBinary = findViewById(R.id.tvBinary)
+        tvLogPreview = findViewById(R.id.tvLogPreview)
+
+        etProfileName = findViewById(R.id.etProfileName)
         etServerAddr = findViewById(R.id.etServerAddr)
         etServerPort = findViewById(R.id.etServerPort)
         etToken = findViewById(R.id.etToken)
@@ -84,11 +206,127 @@ class MainActivity : AppCompatActivity() {
         cbTls = findViewById(R.id.cbTls)
         cbEnc = findViewById(R.id.cbEnc)
         cbComp = findViewById(R.id.cbComp)
-        tvStatus = findViewById(R.id.tvStatus)
-        tvLog = findViewById(R.id.tvLog)
+
+        profileList = findViewById(R.id.profileList)
     }
 
-    private fun fill(c: FrpcConfig) {
+    private fun setupBottomNav() {
+        bottomNav.selectedItemId = R.id.nav_control
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_control -> { showPage(PAGE_CONTROL); true }
+                R.id.nav_config -> { showPage(PAGE_CONFIG); true }
+                R.id.nav_list -> { showPage(PAGE_PROFILES); true }
+                else -> false
+            }
+        }
+    }
+
+    private fun showPage(index: Int) {
+        val cur = viewFlipper.displayedChild
+        // 离开配置页前自动保存，防止编辑内容丢失
+        if (cur == PAGE_CONFIG && index != PAGE_CONFIG) saveEditorSilently()
+
+        if (cur != index) {
+            viewFlipper.inAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_in)
+            viewFlipper.outAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_out)
+            viewFlipper.displayedChild = index
+        }
+
+        when (index) {
+            PAGE_CONTROL -> refreshControl()
+            PAGE_CONFIG -> loadEditor()
+            PAGE_PROFILES -> refreshProfiles()
+        }
+    }
+
+    // =================================================================== 控制
+
+    private fun toggleFrpc() {
+        if (FrpcRunner.isRunning()) {
+            send(FrpcService.ACTION_STOP)
+            toast(getString(R.string.toast_stopped))
+        } else {
+            startFrpc()
+        }
+        viewFlipper.postDelayed({ refreshControl() }, 900)
+    }
+
+    private fun startFrpc() {
+        ConfigStore.saveActive(this, collect())
+        send(FrpcService.ACTION_START)
+        toast(getString(R.string.toast_started))
+        viewFlipper.postDelayed({ refreshControl() }, 900)
+    }
+
+    private fun refreshControl() {
+        val running = FrpcRunner.isRunning()
+        val cfg = ConfigStore.activeConfig(this)
+
+        tvState.text = getString(if (running) R.string.state_running else R.string.state_stopped)
+        statusDot.backgroundTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, if (running) R.color.status_running else R.color.status_stopped)
+        )
+        btnToggle.text = getString(if (running) R.string.btn_stop else R.string.btn_start)
+        btnToggle.backgroundTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, if (running) R.color.action_stop else R.color.action_start)
+        )
+        tvHint.text = getString(if (running) R.string.hint_running else R.string.hint_start)
+
+        tvProfile.text = getString(R.string.label_profile, cfg.name.ifBlank { "-" })
+        tvServer.text = getString(R.string.label_server, cfg.serverAddr.ifBlank { "-" })
+        tvTunnel.text = getString(R.string.label_tunnel, cfg.proxyName.ifBlank { "-" })
+        tvPorts.text = getString(R.string.label_ports, cfg.localPort, cfg.remotePort)
+        tvVersion.text = getString(R.string.label_version, frpcVersion)
+
+        val binOk = FrpcRunner.binary(this).exists()
+        tvBinary.text = getString(
+            R.string.label_binary,
+            getString(if (binOk) R.string.binary_ok else R.string.binary_missing)
+        )
+
+        val log = FrpcRunner.logFile(this)
+        tvLogPreview.text = if (log.exists()) {
+            log.readText().takeLast(600).ifBlank { getString(R.string.log_empty) }
+        } else {
+            getString(R.string.log_empty)
+        }
+    }
+
+    private fun showLogDialog() {
+        val f = FrpcRunner.logFile(this)
+        val text = if (f.exists()) f.readText().takeLast(20000) else ""
+        val body = TextView(this).apply {
+            this.text = text.ifBlank { getString(R.string.log_empty) }
+            setPadding(48, 32, 48, 32)
+            textSize = 11f
+            typeface = Typeface.MONOSPACE
+            movementMethod = ScrollingMovementMethod()
+        }
+        val sv = ScrollView(this).apply { addView(body) }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.log_dialog_title)
+            .setView(sv)
+            .setPositiveButton(R.string.btn_close, null)
+            .show()
+    }
+
+    private fun send(action: String) {
+        val i = Intent(this, FrpcService::class.java).setAction(action)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
+        else startService(i)
+    }
+
+    // =================================================================== 配置编辑
+
+    private fun loadEditor() {
+        val name = ConfigStore.activeName(this)
+        val cfg = ConfigStore.activeConfig(this)
+        fillEditor(cfg, cfg.name.ifBlank { name })
+    }
+
+    private fun fillEditor(c: FrpcConfig, name: String) {
+        etProfileName.setText(name)
         etServerAddr.setText(c.serverAddr)
         etServerPort.setText(c.serverPort.toString())
         etToken.setText(c.authToken)
@@ -104,6 +342,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun collect(): FrpcConfig = FrpcConfig(
+        name = etProfileName.text.toString().trim().ifBlank { "default" },
         serverAddr = etServerAddr.text.toString().trim(),
         serverPort = etServerPort.text.toString().trim().toIntOrNull() ?: 7000,
         authToken = etToken.text.toString().trim(),
@@ -119,26 +358,99 @@ class MainActivity : AppCompatActivity() {
         useCompression = cbComp.isChecked
     )
 
-    private fun send(action: String) {
-        val i = Intent(this, FrpcService::class.java).setAction(action)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
-        else startService(i)
-        tvStatus.postDelayed({ refreshStatus() }, 800)
+    private fun saveEditorSilently() {
+        if (!::etProfileName.isInitialized) return
+        runCatching { ConfigStore.saveActive(this, collect()) }
     }
 
-    private fun refreshStatus() {
-        val running = FrpcRunner.isRunning()
-        val binOk = FrpcRunner.binary(this).exists()
-        tvStatus.text = "状态：${if (running) "运行中" else "已停止"}   " +
-                "二进制：${if (binOk) "OK" else "缺失"}"
+    // =================================================================== 列表
+
+    private fun refreshProfiles() {
+        profileList.removeAllViews()
+        val names = ConfigStore.listNames(this)
+
+        if (names.isEmpty()) {
+            profileList.addView(
+                TextView(this).apply {
+                    text = getString(R.string.profiles_empty)
+                    setPadding(8, 24, 8, 24)
+                    setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
+                }
+            )
+            return
+        }
+
+        val active = ConfigStore.activeName(this)
+        names.forEach { name ->
+            val cfg = ConfigStore.load(this, name)
+            val row = layoutInflater.inflate(R.layout.item_profile, profileList, false)
+
+            row.findViewById<TextView>(R.id.itemName).text = name
+            row.findViewById<TextView>(R.id.itemSub).text =
+                getString(R.string.label_server, cfg.serverAddr.ifBlank { "-" }) +
+                    "   ·   " +
+                    getString(R.string.label_ports, cfg.localPort, cfg.remotePort)
+
+            val isActive = name == active
+            row.findViewById<TextView>(R.id.itemActive).visibility =
+                if (isActive) View.VISIBLE else View.GONE
+            row.findViewById<View>(R.id.itemDot).backgroundTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(this, if (isActive) R.color.status_running else R.color.status_stopped)
+            )
+
+            // 点击整行 -> 设为当前生效
+            row.setOnClickListener {
+                ConfigStore.setActive(this, name)
+                refreshProfiles()
+            }
+
+            row.findViewById<MaterialButton>(R.id.itemEdit).setOnClickListener {
+                ConfigStore.setActive(this, name)
+                bottomNav.selectedItemId = R.id.nav_config
+            }
+
+            row.findViewById<MaterialButton>(R.id.itemDelete).setOnClickListener {
+                if (ConfigStore.delete(this, name)) {
+                    toast(getString(R.string.toast_profile_deleted, name))
+                    refreshProfiles()
+                    refreshControl()
+                } else {
+                    toast(getString(R.string.err_last_profile))
+                }
+            }
+
+            profileList.addView(row)
+        }
     }
 
-    private fun refreshLog() {
-        val f = FrpcRunner.logFile(this)
-        tvLog.text = if (f.exists()) f.readText().takeLast(4000) else "暂无日志"
+    private fun newProfileDialog() {
+        val input = EditText(this).apply { hint = getString(R.string.dialog_new_profile_hint) }
+        val wrap = FrameLayout(this).apply {
+            setPadding(48, 16, 48, 0)
+            addView(input)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_new_profile_title)
+            .setView(wrap)
+            .setPositiveButton(R.string.dlg_ok) { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) {
+                    toast(getString(R.string.err_name_empty))
+                    return@setPositiveButton
+                }
+                val template = ConfigStore.loadDefaults(this)
+                template.name = name
+                val created = ConfigStore.create(this, name, template)
+                toast(getString(R.string.toast_profile_created, created))
+                refreshProfiles()
+                bottomNav.selectedItemId = R.id.nav_config
+            }
+            .setNegativeButton(R.string.dlg_cancel, null)
+            .show()
     }
 
-    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+    // =================================================================== 权限 / 引导
 
     private fun askNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -150,4 +462,29 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
+
+    private fun maybeAskBatteryOptimization() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+
+        val prefs = getSharedPreferences("frpc_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("asked_battery", false)) return
+        prefs.edit().putBoolean("asked_battery", true).apply()
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.battery_title)
+            .setMessage(R.string.battery_message)
+            .setPositiveButton(R.string.battery_go) { _, _ ->
+                runCatching {
+                    startActivity(
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            .setData(Uri.parse("package:$packageName"))
+                    )
+                }
+            }
+            .setNegativeButton(R.string.battery_later, null)
+            .show()
+    }
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 }

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.FrpcOnDemand" parent="Theme.AppCompat.DayNight.DarkActionBar" />
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- 使用 Material3 主题，无系统 ActionBar（由布局里的 MaterialToolbar 承担） -->
+    <style name="Theme.FrpcOnDemand" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/brand_primary_dark</item>
+    </style>
 </resources>

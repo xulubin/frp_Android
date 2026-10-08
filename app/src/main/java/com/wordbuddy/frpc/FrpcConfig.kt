@@ -3,10 +3,11 @@ package com.wordbuddy.frpc
 import org.json.JSONObject
 
 /**
- * frp 客户端配置模型。
+ * frp 客户端配置模型（一个配置 = 一条隧道 = 一个 profile）。
  * 结构化存储（JSON），生成 frpc.toml 时再转文本，避免手写 TOML 出错。
  */
 data class FrpcConfig(
+    var name: String = "default",
     var serverAddr: String = "",
     var serverPort: Int = 7000,
     var authToken: String = "",
@@ -23,6 +24,7 @@ data class FrpcConfig(
 ) {
     fun toJson(): String {
         val o = JSONObject()
+        o.put("name", name)
         o.put("serverAddr", serverAddr)
         o.put("serverPort", serverPort)
         o.put("authToken", authToken)
@@ -47,6 +49,7 @@ data class FrpcConfig(
             val o = JSONObject(s)
             val d = fallback()
             return FrpcConfig(
+                name = o.optString("name", d.name),
                 serverAddr = o.optString("serverAddr", d.serverAddr),
                 serverPort = o.optInt("serverPort", d.serverPort),
                 authToken = o.optString("authToken", d.authToken),

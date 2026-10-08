@@ -1,153 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="@color/page_bg"
+    android:orientation="vertical">
 
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/brand_primary"
+        app:title="@string/app_name"
+        app:titleTextColor="#FFFFFF" />
+
+    <!-- 两个页面：0 = 控制页（默认），1 = 配置页 -->
+    <ViewFlipper
+        android:id="@+id/viewFlipper"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <include layout="@layout/page_control" />
+
+        <include layout="@layout/page_config" />
+
+        <include layout="@layout/page_profiles" />
+    </ViewFlipper>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:background="#FFFFFF"
+        app:menu="@menu/bottom_nav" />
 
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingBottom="12dp"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:text="状态：未知" />
-
-        <EditText
-            android:id="@+id/etServerAddr"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="服务器地址 serverAddr"
-            android:inputType="textUri" />
-
-        <EditText
-            android:id="@+id/etServerPort"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="服务器端口 serverPort"
-            android:inputType="number" />
-
-        <EditText
-            android:id="@+id/etToken"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="认证 Token"
-            android:inputType="text" />
-
-        <EditText
-            android:id="@+id/etUser"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="用户标识 user（可留空）"
-            android:inputType="text" />
-
-        <EditText
-            android:id="@+id/etDns"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="DNS（如 114.114.114.114）"
-            android:inputType="text" />
-
-        <EditText
-            android:id="@+id/etProxyName"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="隧道名称 proxyName"
-            android:inputType="text" />
-
-        <EditText
-            android:id="@+id/etLocalIP"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="本地地址 localIP（通常 127.0.0.1）"
-            android:inputType="text" />
-
-        <EditText
-            android:id="@+id/etLocalPort"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="本地端口 localPort（须 = adbd 端口，如 5555）"
-            android:inputType="number" />
-
-        <EditText
-            android:id="@+id/etRemotePort"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="远程端口 remotePort（面板分配，60000-65530）"
-            android:inputType="number" />
-
-        <CheckBox
-            android:id="@+id/cbTls"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="启用 TLS 加密传输" />
-
-        <CheckBox
-            android:id="@+id/cbEnc"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="启用隧道加密 useEncryption" />
-
-        <CheckBox
-            android:id="@+id/cbComp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="启用压缩 useCompression" />
-
-        <Button
-            android:id="@+id/btnSave"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="保存工作配置" />
-
-        <Button
-            android:id="@+id/btnStart"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="保存并启动 frpc" />
-
-        <Button
-            android:id="@+id/btnStop"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="停止 frpc" />
-
-        <Button
-            android:id="@+id/btnSaveAsDefault"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="把当前内容设为【默认配置】" />
-
-        <Button
-            android:id="@+id/btnRestoreDefault"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="从【默认配置】恢复" />
-
-        <Button
-            android:id="@+id/btnLog"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="刷新日志" />
-
-        <TextView
-            android:id="@+id/tvLog"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:fontFamily="monospace"
-            android:textSize="11sp"
-            android:textIsSelectable="true"
-            android:text="" />
-
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌 / 主色 -->
+    <color name="brand_primary">#1565C0</color>
+    <color name="brand_primary_dark">#0D47A1</color>
+
+    <!-- 启停按钮 -->
+    <color name="action_start">#2E7D32</color>
+    <color name="action_start_dark">#1B5E20</color>
+    <color name="action_stop">#C62828</color>
+    <color name="action_stop_dark">#8E0000</color>
+
+    <!-- 状态点 -->
+    <color name="status_running">#2E7D32</color>
+    <color name="status_stopped">#9E9E9E</color>
+
+    <color name="card_bg">#FFFFFF</color>
+    <color name="page_bg">#F2F3F5</color>
+    <color name="text_primary">#1A1A1A</color>
+    <color name="text_secondary">#6B6B6B</color>
+</resources>
