@@ -1,0 +1,17 @@
+# ---- Android / Gradle ----
+*.iml
+.gradle/
+build/
+/local.properties
+/.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---- frpc 二进制：由 CI 从官方 Release 下载，不提交 ----
+/app/src/main/jniLibs/arm64-v8a/libfrpc.so
+
+# ---- 本地私密配置：不要把带 token 的文件提交 ----
+# 如果你在本地把真实配置写进了 assets，请取消下面一行的注释
+# /app/src/main/assets/default_config.json

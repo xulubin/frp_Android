@@ -1,0 +1,15 @@
+{
+  "serverAddr": "<你的公益frp服务器域名或IP>",
+  "serverPort": 7000,
+  "authToken": "<面板给你的token>",
+  "user": "",
+  "tlsEnable": true,
+  "dnsServer": "114.114.114.114",
+  "proxyName": "helper",
+  "proxyType": "tcp",
+  "localIP": "127.0.0.1",
+  "localPort": 5555,
+  "remotePort": 60000,
+  "useEncryption": true,
+  "useCompression": true
+}
