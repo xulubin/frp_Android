@@ -24,6 +24,21 @@ class FrpcService : Service() {
         const val ACTION_TOGGLE = "com.wordbuddy.frpc.TOGGLE"
         private const val CH_ID = "frpc_channel"
         private const val NOTI_ID = 1001
+
+        /**
+         * 统一入口：主界面按钮与快捷设置磁贴都走这里。
+         * Android 12+ 在后台启动前台服务可能抛异常（如磁贴点击场景），
+         * 因此失败时降级为普通 startService，避免"点了没反应"。
+         */
+        fun send(ctx: Context, action: String) {
+            val i = Intent(ctx, FrpcService::class.java).setAction(action)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i)
+                else ctx.startService(i)
+            } catch (t: Throwable) {
+                runCatching { ctx.startService(i) }
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -1,6 +1,5 @@
 package com.wordbuddy.frpc
 
-import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -26,9 +25,8 @@ class FrpcTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
-        val i = Intent(this, FrpcService::class.java).setAction(FrpcService.ACTION_TOGGLE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
-        else startService(i)
+        // 走统一入口，内部已处理 Android 12+ 后台启动前台服务被拒的情况
+        FrpcService.send(this, FrpcService.ACTION_TOGGLE)
 
         // 立即反馈（服务真正状态稍后由 onStartListening 校正）
         qsTile?.let { t ->

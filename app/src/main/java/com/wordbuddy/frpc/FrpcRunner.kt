@@ -1,6 +1,7 @@
 package com.wordbuddy.frpc
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 
 /**
@@ -11,6 +12,12 @@ import java.io.File
 object FrpcRunner {
 
     private const val BIN_NAME = "libfrpc.so"
+
+    /**
+     * logcat 控制标签。root 守护订阅 main 缓冲区的该标签，
+     * 因此点「启动/停止」时守护能瞬时开/关 ADB 端口（无需等待兜底轮询）。
+     */
+    const val CTL_TAG = "frp_light"
 
     @Volatile
     private var process: Process? = null
@@ -24,7 +31,13 @@ object FrpcRunner {
     /** 运行标记：watchdog 可选据此判定更精确的信号 */
     fun marker(ctx: Context): File = File(ctx.filesDir, "frpc.active")
 
-    fun isRunning(): Boolean = process?.isAlive == true
+    /** 进程存活判定；已退出则顺手回收（例如配置错误导致 frpc 秒退） */
+    fun isRunning(): Boolean {
+        val p = process ?: return false
+        if (p.isAlive) return true
+        process = null
+        return false
+    }
 
     /**
      * 读取 frpc 版本（执行 `libfrpc.so -v`）。
@@ -66,6 +79,7 @@ object FrpcRunner {
             val p = pb.start()
             process = p
             runCatching { marker(ctx).writeText(System.currentTimeMillis().toString()) }
+            Log.i(CTL_TAG, "state=on")
             null
         } catch (t: Throwable) {
             "启动异常：${t.message}"
@@ -80,5 +94,6 @@ object FrpcRunner {
             runCatching { p.waitFor() }
         }
         process = null
+        Log.i(CTL_TAG, "state=off")
     }
 }

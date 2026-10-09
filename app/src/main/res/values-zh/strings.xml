@@ -84,6 +84,12 @@
     <string name="toast_export_failed">导出失败：%1$s</string>
     <string name="err_last_profile">不能删除最后一条配置</string>
     <string name="err_name_empty">名称不能为空</string>
+    <string name="err_server_empty">服务器地址不能为空，请先到「配置」页填写</string>
+    <string name="err_server_port">服务器端口不合法</string>
+    <string name="err_local_port">本地端口不合法</string>
+    <string name="err_remote_port">远程端口不合法</string>
+    <string name="dlg_start_failed">frpc 启动失败</string>
+    <string name="start_failed_empty">frpc 启动后立即退出，且日志为空。请检查 APK 内是否已打入 libfrpc.so，以及配置是否正确。</string>
     <string name="export_file_name">frp_light_profile.json</string>
 
     <!-- 保活引导 -->

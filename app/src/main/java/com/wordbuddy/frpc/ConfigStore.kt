@@ -123,10 +123,28 @@ object ConfigStore {
         return if (n.isBlank()) loadDefaults(ctx) else load(ctx, n)
     }
 
-    /** 保存"当前生效"配置；名称改变即视为重命名 */
-    fun saveActive(ctx: Context, cfg: FrpcConfig) {
+    /** 配置是否可用于启动；返回错误文案，null 表示通过 */
+    fun configError(ctx: Context, c: FrpcConfig): String? {
+        if (c.serverAddr.isBlank()) return ctx.getString(R.string.err_server_empty)
+        if (c.serverPort !in 1..65535) return ctx.getString(R.string.err_server_port)
+        if (c.localPort !in 1..65535) return ctx.getString(R.string.err_local_port)
+        if (c.remotePort !in 1..65535) return ctx.getString(R.string.err_remote_port)
+        return null
+    }
+
+    /**
+     * 保存"当前生效"配置；名称改变即视为重命名。
+     * 返回 null 表示成功，否则返回错误文案，且**不会改动任何已有配置**。
+     *
+     * 关键防护：内容不合法（如 serverAddr 为空）时直接拒绝写入。
+     * 历史 bug：界面字段尚未加载就被回写，导致整条配置被清空并被改名。
+     */
+    fun saveActive(ctx: Context, cfg: FrpcConfig): String? {
         val c = cfg.copy()
         if (c.name.isBlank()) c.name = ACTIVE_NAME
+
+        configError(ctx, c)?.let { return it }
+
         val old = activeName(ctx)
         val names = readNames(ctx).toMutableList()
 
@@ -146,6 +164,7 @@ object ConfigStore {
         }
         if (!names.contains(c.name)) names.add(c.name)
         writeIndex(ctx, names, c.name)
+        return null
     }
 
     /** 新建配置，返回最终名称（重名自动加后缀） */
@@ -212,6 +231,18 @@ object ConfigStore {
         } else {
             val a = readActive(ctx)
             if (a.isBlank() || !names.contains(a)) writeIndex(ctx, names, names.first())
+        }
+
+        // 自愈：修复历史版本可能写空的"当前生效"配置（serverAddr 为空即视为损坏）
+        val an = activeName(ctx)
+        if (an.isNotBlank()) {
+            val f = profileFile(ctx, an)
+            val cur = readJson(f)
+            if (cur == null || cur.serverAddr.isBlank()) {
+                val healed = loadDefaults(ctx)
+                healed.name = an
+                writeJson(ctx, f, healed)
+            }
         }
     }
 }

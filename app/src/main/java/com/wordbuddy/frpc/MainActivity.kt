@@ -82,6 +82,12 @@ class MainActivity : AppCompatActivity() {
 
     private var frpcVersion = "…"
 
+    /** 编辑页是否已把配置灌进界面；未灌前禁止回写，防止用空值覆盖配置 */
+    private var editorLoaded = false
+
+    /** 已发出启动指令、等待确认结果 */
+    private var pendingStart = false
+
     // ---------------- SAF：导出 / 导入（无需任何存储权限） ----------------
     private val exportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -121,6 +127,8 @@ class MainActivity : AppCompatActivity() {
 
         // 自愈：保证默认模板与至少一条配置存在（并迁移旧版单配置）
         ConfigStore.ensureWorking(this)
+        // 关键：启动时就把配置灌进编辑框，避免"字段还空着就被回写"导致配置被清空
+        loadEditor()
 
         // ---- 控制页 ----
         btnToggle.setOnClickListener { toggleFrpc() }
@@ -129,14 +137,22 @@ class MainActivity : AppCompatActivity() {
 
         // ---- 配置页 ----
         findViewById<MaterialButton>(R.id.btnSave).setOnClickListener {
-            ConfigStore.saveActive(this, collect())
-            toast(getString(R.string.toast_saved))
-            refreshControl()
+            val err = ConfigStore.saveActive(this, collect())
+            if (err != null) {
+                toast(err)
+            } else {
+                toast(getString(R.string.toast_saved))
+                refreshControl()
+            }
         }
         findViewById<MaterialButton>(R.id.btnSaveStart).setOnClickListener {
-            ConfigStore.saveActive(this, collect())
-            bottomNav.selectedItemId = R.id.nav_control
-            startFrpc()
+            val err = ConfigStore.saveActive(this, collect())
+            if (err != null) {
+                toast(err)
+            } else {
+                bottomNav.selectedItemId = R.id.nav_control
+                startFrpc()
+            }
         }
         findViewById<MaterialButton>(R.id.btnSetDefault).setOnClickListener {
             ConfigStore.saveDefaults(this, collect())
@@ -244,19 +260,46 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleFrpc() {
         if (FrpcRunner.isRunning()) {
+            pendingStart = false
             send(FrpcService.ACTION_STOP)
             toast(getString(R.string.toast_stopped))
+            viewFlipper.postDelayed({ refreshControl() }, 900)
         } else {
             startFrpc()
         }
-        viewFlipper.postDelayed({ refreshControl() }, 900)
     }
 
+    /**
+     * 只使用"已保存的配置"启动，**绝不回写编辑框**。
+     * （历史 bug：这里调用过 saveActive(collect())，在编辑页尚未加载时会把整条配置清空）
+     */
     private fun startFrpc() {
-        ConfigStore.saveActive(this, collect())
+        val cfg = ConfigStore.activeConfig(this)
+        val err = ConfigStore.configError(this, cfg)
+        if (err != null) {
+            toast(err)
+            return
+        }
+        pendingStart = true
         send(FrpcService.ACTION_START)
         toast(getString(R.string.toast_started))
-        viewFlipper.postDelayed({ refreshControl() }, 900)
+        viewFlipper.postDelayed({ verifyStart() }, 1500)
+    }
+
+    /** frpc 若秒退（配置错 / 二进制缺失），把日志尾部弹出来，让失败可见 */
+    private fun verifyStart() {
+        refreshControl()
+        if (!pendingStart) return
+        pendingStart = false
+        if (FrpcRunner.isRunning()) return
+
+        val log = FrpcRunner.logFile(this)
+        val tail = if (log.exists()) log.readText().takeLast(1500).trim() else ""
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dlg_start_failed)
+            .setMessage(tail.ifBlank { getString(R.string.start_failed_empty) })
+            .setPositiveButton(R.string.btn_close, null)
+            .show()
     }
 
     private fun refreshControl() {
@@ -311,11 +354,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun send(action: String) {
-        val i = Intent(this, FrpcService::class.java).setAction(action)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
-        else startService(i)
-    }
+    private fun send(action: String) = FrpcService.send(this, action)
 
     // =================================================================== 配置编辑
 
@@ -323,6 +362,7 @@ class MainActivity : AppCompatActivity() {
         val name = ConfigStore.activeName(this)
         val cfg = ConfigStore.activeConfig(this)
         fillEditor(cfg, cfg.name.ifBlank { name })
+        editorLoaded = true
     }
 
     private fun fillEditor(c: FrpcConfig, name: String) {
@@ -359,7 +399,9 @@ class MainActivity : AppCompatActivity() {
     )
 
     private fun saveEditorSilently() {
-        if (!::etProfileName.isInitialized) return
+        if (!editorLoaded || !::etProfileName.isInitialized) return
+        // 仅在内容合法时自动落盘，避免把半截内容写坏
+        if (ConfigStore.configError(this, collect()) != null) return
         runCatching { ConfigStore.saveActive(this, collect()) }
     }
 
